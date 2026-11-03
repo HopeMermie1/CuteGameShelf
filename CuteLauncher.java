@@ -1,7 +1,6 @@
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.awt.geom.AffineTransform;
+import java.awt.event.*;
+import java.awt.geom.RoundRectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -11,7 +10,9 @@ import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
+import javax.sound.sampled.*;
 import javax.swing.*;
+import javax.swing.border.AbstractBorder;
 import javax.swing.border.EmptyBorder;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
@@ -43,23 +44,29 @@ public class CuteLauncher extends JFrame {
 	private javax.swing.Timer effectTimer;
 	private final SimpleDateFormat dateFmt = new SimpleDateFormat("yyyy-MM-dd HH:mm");
 
+	private float volHover = 0.6f, volClick = 0.7f, volStartup = 0.8f, volBgm = 0.4f;
+	private Clip bgmClip;
+
 	public CuteLauncher() {
 		super("♡ Cute Game Shelf ♡");
 		loadLibrary();
 		loadBackground();
 
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setMinimumSize(new Dimension(800, 540));
-		setSize(1020, 700);
+		setMinimumSize(new Dimension(860, 600));
+		setSize(1100, 760);
 		setLocationRelativeTo(null);
+
+		playSound("C:\\Users\\hopem\\OneDrive\\Desktop\\Games\\startup.wav", volStartup, false);
 
 		LoadingPanel loading = new LoadingPanel();
 		setContentPane(loading);
 		setVisible(true);
 
-		javax.swing.Timer switchTimer = new javax.swing.Timer(1300, e -> {
+		javax.swing.Timer switchTimer = new javax.swing.Timer(2200, e -> {
 			((javax.swing.Timer) e.getSource()).stop();
 			showMainUI();
+			startBgm();
 		});
 		switchTimer.setRepeats(false);
 		switchTimer.start();
@@ -78,9 +85,9 @@ public class CuteLauncher extends JFrame {
 					SwingUtilities.convertPointFromScreen(p, content);
 					if (content.contains(p)) {
 						trail.add(0, new TrailPoint(p.x, p.y));
-						if (trail.size() > 26) trail.remove(trail.size() - 1);
-						if (rand.nextInt(7) == 0) {
-							trail.add(0, new TrailPoint(p.x + rand.nextInt(13) - 6, p.y + rand.nextInt(13) - 6, true));
+						if (trail.size() > 22) trail.remove(trail.size() - 1);
+						if (rand.nextInt(9) == 0) {
+							trail.add(0, new TrailPoint(p.x + rand.nextInt(17) - 8, p.y + rand.nextInt(17) - 8, true));
 						}
 					}
 				}
@@ -104,8 +111,8 @@ public class CuteLauncher extends JFrame {
 		searchField.setForeground(ink);
 		searchField.setBackground(Color.WHITE);
 		searchField.setBorder(BorderFactory.createCompoundBorder(
-			BorderFactory.createLineBorder(new Color(220, 180, 200), 2),
-			new EmptyBorder(4, 6, 4, 6)));
+			new RoundedBorder(new Color(220, 180, 200), 2, 12),
+			new EmptyBorder(4, 8, 4, 8)));
 		searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
 			public void insertUpdate(javax.swing.event.DocumentEvent e) { applyFilter(); }
 			public void removeUpdate(javax.swing.event.DocumentEvent e) { applyFilter(); }
@@ -116,6 +123,8 @@ public class CuteLauncher extends JFrame {
 		add.addActionListener(e -> importGame());
 		JButton bgButton = makeCuteButton("Background");
 		bgButton.addActionListener(e -> chooseBackground());
+		JButton options = makeCuteButton("Options");
+		options.addActionListener(e -> showOptions());
 
 		JLabel colLabel = new JLabel("Cols");
 		colLabel.setForeground(ink);
@@ -131,14 +140,15 @@ public class CuteLauncher extends JFrame {
 		topControls.add(columnSpinner);
 		topControls.add(add);
 		topControls.add(bgButton);
+		topControls.add(options);
 		header.add(topControls, BorderLayout.EAST);
 
-		JPanel filters = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+		JPanel filters = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
 		filters.setOpaque(false);
-		filters.setBorder(new EmptyBorder(0, 18, 6, 18));
+		filters.setBorder(new EmptyBorder(0, 18, 8, 18));
 		String[] filterNames = {"All", "Favorites", "Recently Added", "Recently Played", "Most Played"};
 		for (String name : filterNames) {
-			JButton b = makeCuteButton(name);
+			JButton b = makeFilterButton(name);
 			b.addActionListener(e -> {
 				currentFilter = name;
 				applyFilter();
@@ -153,7 +163,7 @@ public class CuteLauncher extends JFrame {
 		content.add(north, BorderLayout.NORTH);
 
 		grid.setOpaque(false);
-		grid.setBorder(new EmptyBorder(8, 18, 16, 18));
+		grid.setBorder(new EmptyBorder(12, 18, 20, 18));
 		JScrollPane scroll = new JScrollPane(grid);
 		scroll.setBorder(null);
 		scroll.setOpaque(false);
@@ -168,21 +178,31 @@ public class CuteLauncher extends JFrame {
 	}
 
 	private JButton makeCuteButton(String text) {
-		JButton b = new JButton(text);
+		JButton b = new RoundedButton(text, this);
+		b.setFont(new Font("Monospaced", Font.BOLD, 11));
+		b.setForeground(ink);
+		b.setBackground(new Color(255, 240, 245));
+		b.setFocusPainted(false);
+		b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+		b.setMargin(new Insets(4, 8, 4, 8));
+		return b;
+	}
+
+	private JButton makeFilterButton(String text) {
+		JButton b = new FlowerButton(text, this);
 		b.setFont(new Font("Monospaced", Font.BOLD, 12));
 		b.setForeground(ink);
 		b.setBackground(new Color(255, 245, 248));
 		b.setFocusPainted(false);
-		b.setBorder(BorderFactory.createCompoundBorder(
-			BorderFactory.createLineBorder(new Color(255, 160, 190), 2, true),
-			new EmptyBorder(5, 10, 5, 10)));
 		b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		return b;
 	}
 
 	private void startEffects() {
-		for (int i = 0; i < 9; i++) petals.add(new Sakura());
-		effectTimer = new javax.swing.Timer(35, e -> {
+		petals.clear();
+		for (int i = 0; i < 18; i++) petals.add(new Sakura());
+		if (effectTimer != null) effectTimer.stop();
+		effectTimer = new javax.swing.Timer(30, e -> {
 			for (Sakura s : petals) s.update();
 			for (int i = trail.size() - 1; i >= 0; i--) {
 				trail.get(i).life--;
@@ -191,6 +211,110 @@ public class CuteLauncher extends JFrame {
 			repaint();
 		});
 		effectTimer.start();
+	}
+
+	void playSound(String path, float volume, boolean loop) {
+	new Thread(() -> {
+		try {
+			File f = new File(path);
+			if (!f.exists()) return;
+			AudioInputStream ais = AudioSystem.getAudioInputStream(f);
+			AudioFormat base = ais.getFormat();
+			AudioFormat decoded = new AudioFormat(
+				AudioFormat.Encoding.PCM_SIGNED,
+				base.getSampleRate(),
+				16,
+				base.getChannels(),
+				base.getChannels() * 2,
+				base.getSampleRate(),
+				false);
+			AudioInputStream pcm = AudioSystem.getAudioInputStream(decoded, ais);
+			Clip clip = AudioSystem.getClip();
+			clip.open(pcm);
+			if (clip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+				FloatControl gain = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
+				float dB = (float) (Math.log(Math.max(0.0001f, volume)) / Math.log(10.0) * 20.0);
+				gain.setValue(Math.max(gain.getMinimum(), Math.min(gain.getMaximum(), dB)));
+			}
+			if (loop) {
+				clip.loop(Clip.LOOP_CONTINUOUSLY);
+				bgmClip = clip;
+			} else {
+				clip.start();
+			}
+		} catch (Exception ignored) {}
+	}).start();
+}
+
+private void startBgm() {
+	if (bgmClip != null && bgmClip.isRunning()) return;
+	playSound("C:\\Users\\hopem\\OneDrive\\Desktop\\Games\\bgm.wav", volBgm, true);
+}
+
+	private void showOptions() {
+		JDialog d = new JDialog(this, "Options", true);
+		d.setLayout(new BorderLayout(10, 10));
+		d.getContentPane().setBackground(new Color(255, 246, 250));
+
+		JPanel sliders = new JPanel(new GridLayout(0, 1, 6, 8));
+		sliders.setOpaque(false);
+		sliders.setBorder(new EmptyBorder(16, 20, 8, 20));
+
+		JSlider sHover = volSlider(volHover);
+		JSlider sClick = volSlider(volClick);
+		JSlider sStartup = volSlider(volStartup);
+		JSlider sBgm = volSlider(volBgm);
+
+		sliders.add(labeled("Hover volume", sHover));
+		sliders.add(labeled("Click volume", sClick));
+		sliders.add(labeled("Startup volume", sStartup));
+		sliders.add(labeled("Background volume", sBgm));
+
+		JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+		buttons.setOpaque(false);
+		JButton apply = makeCuteButton("Apply");
+		apply.addActionListener(e -> {
+			volHover = sHover.getValue() / 100f;
+			volClick = sClick.getValue() / 100f;
+			volStartup = sStartup.getValue() / 100f;
+			volBgm = sBgm.getValue() / 100f;
+			saveLibrary();
+			if (bgmClip != null && bgmClip.isControlSupported(FloatControl.Type.MASTER_GAIN)) {
+				try {
+					FloatControl gain = (FloatControl) bgmClip.getControl(FloatControl.Type.MASTER_GAIN);
+					float dB = (float) (Math.log(Math.max(0.0001f, volBgm)) / Math.log(10.0) * 20.0);
+					gain.setValue(Math.max(gain.getMinimum(), Math.min(gain.getMaximum(), dB)));
+				} catch (Exception ignored) {}
+			}
+			d.dispose();
+		});
+		JButton close = makeCuteButton("Close");
+		close.addActionListener(e -> d.dispose());
+		buttons.add(apply);
+		buttons.add(close);
+
+		d.add(sliders, BorderLayout.CENTER);
+		d.add(buttons, BorderLayout.SOUTH);
+		d.pack();
+		d.setLocationRelativeTo(this);
+		d.setVisible(true);
+	}
+
+	private JSlider volSlider(float v) {
+		JSlider s = new JSlider(0, 100, (int) (v * 100));
+		s.setOpaque(false);
+		return s;
+	}
+
+	private JPanel labeled(String text, JSlider s) {
+		JPanel p = new JPanel(new BorderLayout(8, 0));
+		p.setOpaque(false);
+		JLabel l = new JLabel(text);
+		l.setFont(new Font("Monospaced", Font.PLAIN, 13));
+		l.setForeground(ink);
+		p.add(l, BorderLayout.WEST);
+		p.add(s, BorderLayout.CENTER);
+		return p;
 	}
 
 	private Image scaleIcon(Image src, int maxW, int maxH) {
@@ -346,7 +470,7 @@ public class CuteLauncher extends JFrame {
 			empty.setForeground(ink);
 			grid.add(empty);
 		} else {
-			grid.setLayout(new GridLayout(0, columns, 14, 14));
+			grid.setLayout(new GridLayout(0, columns, 18, 18));
 			for (int i = 0; i < filtered.size(); i++) grid.add(new GameCard(filtered.get(i), i));
 		}
 		grid.revalidate();
@@ -415,6 +539,10 @@ public class CuteLauncher extends JFrame {
 			if (cols != null) {
 				try { columns = Integer.parseInt(cols); columnSpinner.setValue(columns); } catch (Exception ignored) {}
 			}
+			try { volHover = Float.parseFloat(p.getProperty("volHover", "0.6")); } catch (Exception ignored) {}
+			try { volClick = Float.parseFloat(p.getProperty("volClick", "0.7")); } catch (Exception ignored) {}
+			try { volStartup = Float.parseFloat(p.getProperty("volStartup", "0.8")); } catch (Exception ignored) {}
+			try { volBgm = Float.parseFloat(p.getProperty("volBgm", "0.4")); } catch (Exception ignored) {}
 			for (String key : p.stringPropertyNames()) {
 				if (!key.startsWith("game.") || !key.endsWith(".name")) continue;
 				String id = key.substring(5, key.length() - 5);
@@ -455,6 +583,10 @@ public class CuteLauncher extends JFrame {
 			Files.createDirectories(dataDir);
 			Properties p = new Properties();
 			p.setProperty("columns", String.valueOf(columns));
+			p.setProperty("volHover", String.valueOf(volHover));
+			p.setProperty("volClick", String.valueOf(volClick));
+			p.setProperty("volStartup", String.valueOf(volStartup));
+			p.setProperty("volBgm", String.valueOf(volBgm));
 			for (Game game : games) {
 				p.setProperty("game." + game.id + ".name", game.name);
 				p.setProperty("game." + game.id + ".path", game.path);
@@ -508,7 +640,102 @@ public class CuteLauncher extends JFrame {
 		boolean sparkle;
 		TrailPoint(int x, int y) { this(x, y, false); }
 		TrailPoint(int x, int y, boolean sparkle) {
-			this.x = x; this.y = y; this.life = sparkle ? 11 : 22; this.sparkle = sparkle;
+			this.x = x; this.y = y; this.life = sparkle ? 9 : 18; this.sparkle = sparkle;
+		}
+	}
+
+	static class RoundedBorder extends AbstractBorder {
+		private final Color color;
+		private final int thickness;
+		private final int radius;
+		RoundedBorder(Color color, int thickness, int radius) {
+			this.color = color; this.thickness = thickness; this.radius = radius;
+		}
+		@Override
+		public void paintBorder(Component c, Graphics g, int x, int y, int w, int h) {
+			Graphics2D g2 = (Graphics2D) g.create();
+			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+			g2.setColor(color);
+			g2.setStroke(new BasicStroke(thickness));
+			g2.draw(new RoundRectangle2D.Float(x + thickness / 2f, y + thickness / 2f, w - thickness, h - thickness, radius, radius));
+			g2.dispose();
+		}
+		@Override
+		public Insets getBorderInsets(Component c) {
+			return new Insets(6, 10, 6, 10);
+		}
+	}
+
+	static class RoundedButton extends JButton {
+		private final CuteLauncher launcher;
+		RoundedButton(String text, CuteLauncher launcher) {
+			super(text);
+			this.launcher = launcher;
+			setContentAreaFilled(false);
+			setOpaque(false);
+			setBorderPainted(false);
+			addMouseListener(new MouseAdapter() {
+				@Override
+				public void mouseEntered(MouseEvent e) {
+					launcher.playSound("C:\\Users\\hopem\\OneDrive\\Desktop\\Games\\hover.wav", launcher.volHover, false);
+				}
+				@Override
+				public void mousePressed(MouseEvent e) {
+					launcher.playSound("C:\\Users\\hopem\\OneDrive\\Desktop\\Games\\click.wav", launcher.volClick, false);
+				}
+			});
+		}
+		@Override
+		protected void paintComponent(Graphics g) {
+			Graphics2D g2 = (Graphics2D) g.create();
+			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+			g2.setColor(getBackground());
+			g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
+			g2.setColor(new Color(255, 160, 190));
+			g2.setStroke(new BasicStroke(1.5f));
+			g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 12, 12);
+			g2.dispose();
+			super.paintComponent(g);
+		}
+	}
+
+	static class FlowerButton extends JButton {
+		private final CuteLauncher launcher;
+		FlowerButton(String text, CuteLauncher launcher) {
+			super(text);
+			this.launcher = launcher;
+			setContentAreaFilled(false);
+			setOpaque(false);
+			setBorderPainted(false);
+			addMouseListener(new MouseAdapter() {
+				@Override
+				public void mouseEntered(MouseEvent e) {
+					launcher.playSound("C:\\Users\\hopem\\OneDrive\\Desktop\\Games\\hover.wav", launcher.volHover, false);
+				}
+				@Override
+				public void mousePressed(MouseEvent e) {
+					launcher.playSound("C:\\Users\\hopem\\OneDrive\\Desktop\\Games\\click.wav", launcher.volClick, false);
+				}
+			});
+		}
+		@Override
+		protected void paintComponent(Graphics g) {
+			Graphics2D g2 = (Graphics2D) g.create();
+			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+			g2.setColor(getBackground());
+			g2.fillRoundRect(0, 0, getWidth(), getHeight(), 14, 14);
+			g2.setColor(new Color(255, 160, 190));
+			g2.setStroke(new BasicStroke(1.5f));
+			g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 14, 14);
+			g2.dispose();
+			super.paintComponent(g);
+			Graphics2D g3 = (Graphics2D) g.create();
+			g3.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+			g3.setColor(new Color(255, 140, 170, 210));
+			int s = 5;
+			g3.fillOval(2, 2, s, s); g3.fillOval(6, 1, s, s); g3.fillOval(1, 6, s, s); g3.fillOval(5, 5, 3, 3);
+			g3.fillOval(getWidth() - 8, 2, s, s); g3.fillOval(getWidth() - 12, 1, s, s); g3.fillOval(getWidth() - 7, 6, s, s); g3.fillOval(getWidth() - 9, 5, 3, 3);
+			g3.dispose();
 		}
 	}
 
@@ -523,67 +750,53 @@ public class CuteLauncher extends JFrame {
 			this.game = game;
 			baseColor = cardColors[index % cardColors.length];
 			setLayout(new BorderLayout(8, 8));
-			setBackground(baseColor);
-			setBorder(BorderFactory.createCompoundBorder(
-				BorderFactory.createLineBorder(new Color(255, 200, 215), 1, true),
-				new EmptyBorder(10, 10, 10, 10)));
 			setOpaque(false);
+			setBorder(new EmptyBorder(8, 8, 8, 8));
 
 			MouseAdapter hover = new MouseAdapter() {
-				@Override
-				public void mouseEntered(MouseEvent e) {
-					hovered = true;
-					repaint();
-				}
-				@Override
-				public void mouseExited(MouseEvent e) {
-					hovered = false;
-					repaint();
-				}
+				@Override public void mouseEntered(MouseEvent e) { hovered = true; repaint(); }
+				@Override public void mouseExited(MouseEvent e) { hovered = false; repaint(); }
 			};
 			addMouseListener(hover);
 
 			JLabel name = new JLabel((game.favorite ? "★ " : "♡ ") + game.name);
-			name.setFont(new Font("Monospaced", Font.BOLD, 15));
+			name.setFont(new Font("Monospaced", Font.BOLD, 16));
 			name.setForeground(ink);
 			name.addMouseListener(hover);
 
 			JLabel iconArea = new JLabel(game.iconPath == null ? "Set cover" : "", SwingConstants.CENTER);
-			iconArea.setPreferredSize(new Dimension(220, 160));
-			iconArea.setMinimumSize(new Dimension(180, 130));
-			iconArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+			iconArea.setPreferredSize(new Dimension(320, 220));
+			iconArea.setMinimumSize(new Dimension(260, 180));
+			iconArea.setFont(new Font("Monospaced", Font.PLAIN, 13));
 			iconArea.setForeground(new Color(140, 100, 130));
 			iconArea.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 			if (game.iconPath != null) {
 				try {
 					Image raw = new ImageIcon(game.iconPath).getImage();
-					iconArea.setIcon(new ImageIcon(scaleIcon(raw, 220, 160)));
+					iconArea.setIcon(new ImageIcon(scaleIcon(raw, 320, 220)));
 					iconArea.setText("");
 				} catch (Exception ignored) {}
 			}
 			iconArea.addMouseListener(new MouseAdapter() {
-				@Override
-				public void mouseClicked(MouseEvent e) { setGameIcon(game); }
-				@Override
-				public void mouseEntered(MouseEvent e) { hovered = true; repaint(); }
-				@Override
-				public void mouseExited(MouseEvent e) { hovered = false; repaint(); }
+				@Override public void mouseClicked(MouseEvent e) { setGameIcon(game); }
+				@Override public void mouseEntered(MouseEvent e) { hovered = true; repaint(); }
+				@Override public void mouseExited(MouseEvent e) { hovered = false; repaint(); }
 			});
 
-			JLabel path = new JLabel(abbreviate(game.path, 32));
+			JLabel path = new JLabel(abbreviate(game.path, 34));
 			path.setFont(new Font("Monospaced", Font.PLAIN, 10));
 			path.setForeground(new Color(110, 85, 115));
 			path.addMouseListener(hover);
 
-			JPanel top = new JPanel(new BorderLayout(6, 8));
+			JPanel top = new JPanel(new BorderLayout(4, 6));
 			top.setOpaque(false);
 			top.add(name, BorderLayout.NORTH);
 			top.add(iconArea, BorderLayout.CENTER);
 			top.add(path, BorderLayout.SOUTH);
 			top.addMouseListener(hover);
 
-			JPanel buttons = new JPanel(new GridLayout(1, 5, 3, 0));
-			buttons.setOpaque(false);
+			JPanel buttonWrap = new JPanel(new FlowLayout(FlowLayout.CENTER, 3, 2));
+			buttonWrap.setOpaque(false);
 			JButton fav = makeCuteButton(game.favorite ? "Unfav" : "Fav");
 			fav.addActionListener(e -> { game.favorite = !game.favorite; saveLibrary(); applyFilter(); });
 			JButton play = makeCuteButton("▶ Play");
@@ -594,18 +807,18 @@ public class CuteLauncher extends JFrame {
 			saves.addActionListener(e -> openSaveFolder(game));
 			JButton remove = makeCuteButton("X");
 			remove.addActionListener(e -> removeGame(game));
-			buttons.add(fav);
-			buttons.add(play);
-			buttons.add(details);
-			buttons.add(saves);
-			buttons.add(remove);
-			buttons.addMouseListener(hover);
+			buttonWrap.add(fav);
+			buttonWrap.add(play);
+			buttonWrap.add(details);
+			buttonWrap.add(saves);
+			buttonWrap.add(remove);
+			buttonWrap.addMouseListener(hover);
 
 			add(top, BorderLayout.CENTER);
-			add(buttons, BorderLayout.SOUTH);
+			add(buttonWrap, BorderLayout.SOUTH);
 
 			if (game.favorite) {
-				for (int i = 0; i < 4; i++) hearts.add(new Heart());
+				for (int i = 0; i < 3; i++) hearts.add(new Heart());
 			}
 		}
 
@@ -614,33 +827,29 @@ public class CuteLauncher extends JFrame {
 			Graphics2D g2 = (Graphics2D) g.create();
 			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-			// soft darker pink shadow
-			g2.setColor(new Color(220, 160, 180, hovered ? 90 : 50));
-			g2.fillRoundRect(4, 5, getWidth() - 6, getHeight() - 6, 16, 16);
+			g2.setColor(new Color(200, 140, 160, hovered ? 110 : 70));
+			g2.fillRoundRect(6, 7, getWidth() - 10, getHeight() - 10, 20, 20);
 
-			// card body
 			g2.setColor(hovered ? baseColor.brighter() : baseColor);
-			g2.fillRoundRect(0, 0, getWidth() - 6, getHeight() - 6, 14, 14);
+			g2.fillRoundRect(0, 0, getWidth() - 10, getHeight() - 10, 18, 18);
 
-			// border
-			g2.setColor(hovered ? new Color(255, 140, 170) : new Color(255, 200, 215));
-			g2.setStroke(new BasicStroke(hovered ? 2.5f : 1.5f));
-			g2.drawRoundRect(0, 0, getWidth() - 7, getHeight() - 7, 14, 14);
+			g2.setColor(hovered ? new Color(255, 120, 150) : new Color(255, 180, 200));
+			g2.setStroke(new BasicStroke(hovered ? 2.8f : 1.6f));
+			g2.drawRoundRect(1, 1, getWidth() - 12, getHeight() - 12, 18, 18);
 
 			g2.dispose();
 			super.paintComponent(g);
 
-			// effects on top
 			g2 = (Graphics2D) g.create();
 			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-			phase += 0.03f;
+			phase += 0.025f;
 
 			if (game.isNew()) {
-				g2.setColor(new Color(255, 255, 150, 150));
+				g2.setColor(new Color(255, 255, 130, 130));
 				for (int i = 0; i < 3; i++) {
-					float a = phase * 1.5f + i * 1.5f;
-					int x = 12 + (int) ((Math.sin(a) * 0.5 + 0.5) * (getWidth() - 36));
-					int y = 12 + (int) ((Math.cos(a * 0.5) * 0.5 + 0.5) * 14);
+					float a = phase * 1.3f + i * 1.7f;
+					int x = 16 + (int) ((Math.sin(a) * 0.5 + 0.5) * (getWidth() - 44));
+					int y = 16 + (int) ((Math.cos(a * 0.4) * 0.5 + 0.5) * 10);
 					g2.fillRect(x, y, 2, 2);
 				}
 			}
@@ -657,24 +866,24 @@ public class CuteLauncher extends JFrame {
 			float x, y, vy, alpha;
 			Heart() { reset(); }
 			void reset() {
-				x = 0.12f + rand.nextFloat() * 0.76f;
-				y = 0.18f + rand.nextFloat() * 0.45f;
-				vy = -0.001f - rand.nextFloat() * 0.0018f;
+				x = 0.08f + rand.nextFloat() * 0.84f;
+				y = 0.22f + rand.nextFloat() * 0.35f;
+				vy = -0.0008f - rand.nextFloat() * 0.0014f;
 				alpha = 0;
 			}
 			void update() {
 				y += vy;
-				if (alpha < 140) alpha += 2.5f;
-				if (y < 0.06f) {
-					alpha -= 3f;
+				if (alpha < 120) alpha += 2f;
+				if (y < 0.08f) {
+					alpha -= 2.5f;
 					if (alpha <= 0) reset();
 				}
 			}
 			void draw(Graphics2D g) {
-				int px = (int) (x * (getWidth() - 30)) + 10;
-				int py = (int) (y * (getHeight() - 70)) + 14;
-				int a = Math.max(0, Math.min(160, (int) alpha));
-				g.setColor(new Color(255, 110, 150, a));
+				int px = (int) (x * (getWidth() - 40)) + 14;
+				int py = (int) (y * (getHeight() - 90)) + 18;
+				int a = Math.max(0, Math.min(140, (int) alpha));
+				g.setColor(new Color(255, 90, 130, a));
 				g.fillOval(px, py, 5, 4);
 				g.fillOval(px + 3, py, 5, 4);
 				g.fillPolygon(new int[]{px, px + 8, px + 4}, new int[]{py + 3, py + 3, py + 7}, 3);
@@ -687,20 +896,20 @@ public class CuteLauncher extends JFrame {
 		Sakura() { reset(true); }
 		void reset(boolean randomY) {
 			boolean left = rand.nextBoolean();
-			x = left ? rand.nextInt(38) : getWidth() - 38 + rand.nextInt(38);
-			y = randomY ? rand.nextInt(Math.max(1, getHeight())) : -6;
-			speed = 0.35f + rand.nextFloat() * 0.7f;
-			size = 2.8f + rand.nextFloat() * 2.2f;
-			sway = (rand.nextFloat() - 0.5f) * 0.25f;
+			x = left ? rand.nextInt(55) : getWidth() - 55 + rand.nextInt(55);
+			y = randomY ? rand.nextInt(Math.max(1, getHeight())) : -12;
+			speed = 0.55f + rand.nextFloat() * 1.1f;
+			size = 4.5f + rand.nextFloat() * 3.5f;
+			sway = (rand.nextFloat() - 0.5f) * 0.45f;
 		}
 		void update() {
 			y += speed;
 			x += sway;
-			if (y > getHeight() + 5) reset(false);
+			if (y > getHeight() + 12) reset(false);
 		}
 		void draw(Graphics2D g) {
-			g.setColor(new Color(255, 182, 193, 110));
-			g.fillOval((int) x, (int) y, (int) size, (int) (size * 0.48));
+			g.setColor(new Color(255, 160, 175, 170));
+			g.fillOval((int) x, (int) y, (int) size, (int) (size * 0.62));
 		}
 	}
 
@@ -718,13 +927,13 @@ public class CuteLauncher extends JFrame {
 			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 			for (Sakura s : petals) s.draw(g2);
 			for (TrailPoint tp : trail) {
-				int alpha = Math.min(150, tp.life * 6);
+				int alpha = Math.min(130, tp.life * 6);
 				if (tp.sparkle) {
-					g2.setColor(new Color(255, 255, 190, alpha));
+					g2.setColor(new Color(255, 255, 170, alpha));
 					g2.fillRect(tp.x - 1, tp.y - 1, 3, 3);
 				} else {
 					g2.setColor(new Color(255, 255, 255, alpha));
-					int s = 2 + tp.life / 9;
+					int s = 2 + tp.life / 7;
 					g2.fillOval(tp.x - s / 2, tp.y - s / 2, s, s);
 				}
 			}
@@ -733,35 +942,27 @@ public class CuteLauncher extends JFrame {
 	}
 
 	private class LoadingPanel extends JPanel {
-		private float angle = 0;
-		private javax.swing.Timer rot;
+		private final ImageIcon gif;
 		LoadingPanel() {
 			setBackground(new Color(255, 230, 240));
-			rot = new javax.swing.Timer(35, e -> { angle += 0.06f; repaint(); });
-			rot.start();
+			gif = new ImageIcon("C:\\Users\\hopem\\OneDrive\\Desktop\\Games\\heartloadinggif.gif");
 		}
 		@Override
 		protected void paintComponent(Graphics g) {
 			super.paintComponent(g);
+			if (gif != null && gif.getImage() != null) {
+				int w = gif.getIconWidth();
+				int h = gif.getIconHeight();
+				int x = (getWidth() - w) / 2;
+				int y = (getHeight() - h) / 2 - 20;
+				gif.paintIcon(this, g, x, y);
+			}
 			Graphics2D g2 = (Graphics2D) g.create();
-			g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-			int cx = getWidth() / 2;
-			int cy = getHeight() / 2 - 10;
-			float scaleX = (float) Math.abs(Math.cos(angle));
-			if (scaleX < 0.08f) scaleX = 0.08f;
-			AffineTransform old = g2.getTransform();
-			g2.translate(cx, cy);
-			g2.scale(scaleX, 1.0);
-			g2.setColor(new Color(255, 105, 140));
-			g2.fillRect(-18, -9, 13, 13);
-			g2.fillRect(5, -9, 13, 13);
-			g2.fillRect(-12, 4, 25, 11);
-			g2.fillRect(-5, 15, 10, 8);
-			g2.setTransform(old);
 			g2.setFont(new Font("Monospaced", Font.BOLD, 16));
 			g2.setColor(new Color(120, 70, 90));
 			String text = "Loading…";
-			g2.drawString(text, cx - g2.getFontMetrics().stringWidth(text) / 2, cy + 64);
+			int tw = g2.getFontMetrics().stringWidth(text);
+			g2.drawString(text, (getWidth() - tw) / 2, getHeight() / 2 + 80);
 			g2.dispose();
 		}
 	}
